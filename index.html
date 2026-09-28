@@ -86,9 +86,13 @@
           <span>Remind me at</span>
           <select id="reminder-time"></select>
         </label>
-        <a id="reminder-link" class="secondary" href="#">Add daily reminder to Calendar</a>
-        <p class="muted small">Opens an "Add to Calendar" screen. Tap <strong>Add All</strong>. It starts from the next time you picked and stays at that time through daylight saving changes. To change the time, delete the old event in Calendar and add a new one.</p>
-        <p class="muted small">Nothing happens when you tap it? <button type="button" class="link" data-action="share-reminder">Save the reminder file instead</button>, then open it from the Files app.</p>
+        <button type="button" class="secondary" data-action="share-reminder">Add daily reminder to Calendar</button>
+        <ol class="steps small">
+          <li>Tap the button, then choose <strong>Save to Files</strong>.</li>
+          <li>Open the <strong>Files</strong> app and tap <strong>invisible-good-reminder</strong>.</li>
+          <li>Tap <strong>Add All</strong>.</li>
+        </ol>
+        <p class="muted small">It starts from the next time you picked and stays at that time through daylight saving changes. To change the time, delete the old event in Calendar and add a new one.</p>
         <details>
           <summary>Prefer a Shortcuts automation?</summary>
           <ol class="steps">

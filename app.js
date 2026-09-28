@@ -664,10 +664,6 @@ function buildReminderICS(time, now = new Date()) {
   ].join('\r\n');
 }
 
-function reminderHref(time) {
-  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(buildReminderICS(time));
-}
-
 function renderReminderOptions() {
   const select = $('#reminder-time');
   if (select.options.length) return;
@@ -679,16 +675,16 @@ function renderReminderOptions() {
   }
 }
 
-function updateReminderLink() {
-  const time = $('#reminder-time').value;
-  $('#reminder-link').href = reminderHref(time);
-  state.settings.reminderTime = time;
+function saveReminderTime() {
+  state.settings.reminderTime = $('#reminder-time').value;
   persistSoon();
 }
 
-// Fallback: hand the same file to the share sheet (Save to Files, then tap
-// it in Files to add it to Calendar).
+// Hand the file to the share sheet: Save to Files, then open it from the
+// Files app to add it to Calendar. (Linking to the file directly does nothing
+// in a home-screen app.) Built at tap time so it starts from the next occurrence.
 async function shareReminder() {
+  saveReminderTime();
   const time = $('#reminder-time').value;
   const blob = new Blob([buildReminderICS(time)], { type: 'text/calendar' });
   await shareOrDownload(blob, 'invisible-good-reminder.ics');
@@ -720,7 +716,6 @@ function renderSettings() {
   const s = state.settings;
   renderReminderOptions();
   $('#reminder-time').value = s.reminderTime || '21:00';
-  $('#reminder-link').href = reminderHref($('#reminder-time').value);
   $('#last-backup').textContent = s.lastBackup
     ? `Last backup: ${new Date(s.lastBackup).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`
     : 'No backup yet.';
@@ -835,9 +830,7 @@ document.addEventListener('click', e => {
 
 $('#done-btn').addEventListener('click', completeEntry);
 $('#search').addEventListener('input', renderPast);
-$('#reminder-time').addEventListener('change', updateReminderLink);
-// Rebuild at tap time so the start date is always the next occurrence.
-$('#reminder-link').addEventListener('click', updateReminderLink);
+$('#reminder-time').addEventListener('change', saveReminderTime);
 $('#import-file').addEventListener('change', e => {
   const f = e.target.files && e.target.files[0];
   if (f) importBackup(f);

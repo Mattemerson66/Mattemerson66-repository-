@@ -25,7 +25,7 @@ After you save, **From your past** brings back an earlier entry. It prefers one 
 
 ## Daily reminder
 
-Go to **Settings**, then **Daily reminder**, pick a time and tap **Add daily reminder to Calendar**. This adds a daily Calendar event with an alert. It starts from the next time you picked and carries your time zone, so it stays at the same time through daylight saving changes. To change the time, delete the old event and add a new one. If tapping the button does nothing, use **Save the reminder file instead**, then open the file from the Files app. Home-screen web apps can't reliably schedule their own notifications on iPhone, so Calendar does it instead. The Settings screen also explains how to set up a Shortcuts automation that opens the app every day.
+Go to **Settings**, then **Daily reminder**, pick a time and tap **Add daily reminder to Calendar**, then choose **Save to Files**. Open the file from the Files app and tap **Add All**. This adds a daily Calendar event with an alert. It starts from the next time you picked and carries your time zone, so it stays at the same time through daylight saving changes. To change the time, delete the old event and add a new one. Home-screen web apps can't reliably schedule their own notifications on iPhone, so Calendar does it instead. The Settings screen also explains how to set up a Shortcuts automation that opens the app every day.
 
 ## Your data
 
