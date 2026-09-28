@@ -856,8 +856,26 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', () => { if (saveTimer) persist(); });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  // When an update takes over, reload once so the new code runs straight
+  // away instead of on the next launch. Not on first install.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    if (saveTimer) persist();
+    location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+      .then(reg => {
+        // Home-screen apps can stay alive in the background for days; check
+        // for an update each time the app comes back to the foreground.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
   });
 }
 
