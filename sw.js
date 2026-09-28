@@ -1,6 +1,6 @@
 // Offline support: serve the app from cache, refresh the cache in the
 // background. Bump VERSION whenever app files change so old caches are cleared.
-const VERSION = 'invisible-good-v1';
+const VERSION = 'invisible-good-v2';
 const SHELL = [
   './',
   './index.html',
