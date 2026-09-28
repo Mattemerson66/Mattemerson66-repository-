@@ -551,10 +551,121 @@ function renderEntryCard(entry, query) {
 
 /* ---------- Settings: reminder ---------- */
 
-// Reminders are static .ics files (see tools/make-reminders.mjs). Linking to a
-// real file lets iOS show its native "Add to Calendar" sheet.
-function reminderFile(time) {
-  return `reminders/${time.replace(':', '')}.ics`;
+// The reminder is a daily repeating Calendar event built on the phone at the
+// moment you tap the button, so it starts from the next occurrence of the
+// chosen time. It carries the phone's time zone and that zone's daylight
+// saving rules, so 9pm stays 9pm all year.
+
+const pad2 = n => String(n).padStart(2, '0');
+const icsLocal = d => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}00`;
+const icsUTCFields = d => `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}00`;
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+function icsEscape(str) {
+  return str.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+// Minutes east of UTC at a given instant, in the phone's own time zone.
+function utcOffset(date) {
+  return -date.getTimezoneOffset();
+}
+
+function formatOffset(mins) {
+  const sign = mins < 0 ? '-' : '+';
+  const a = Math.abs(mins);
+  return `${sign}${pad2(Math.floor(a / 60))}${pad2(a % 60)}`;
+}
+
+// Find the instants in `year` where the UTC offset changes (DST starts/ends).
+function offsetTransitions(year) {
+  const out = [];
+  let prev = new Date(year, 0, 1);
+  for (let day = 1; day <= 366; day++) {
+    const next = new Date(year, 0, 1 + day);
+    if (utcOffset(prev) !== utcOffset(next)) {
+      let lo = prev.getTime();
+      let hi = next.getTime();
+      while (hi - lo > 60000) {
+        const mid = Math.floor((lo + hi) / 2 / 60000) * 60000;
+        if (utcOffset(new Date(mid)) === utcOffset(prev)) lo = mid; else hi = mid;
+      }
+      out.push({ at: new Date(hi), from: utcOffset(prev), to: utcOffset(next) });
+    }
+    prev = next;
+    if (next.getFullYear() > year) break;
+  }
+  return out;
+}
+
+function buildVTimezone(tzid, year) {
+  const lines = ['BEGIN:VTIMEZONE', `TZID:${tzid}`];
+  const transitions = offsetTransitions(year);
+  if (transitions.length !== 2) {
+    // No daylight saving (or rules too irregular to express): one fixed offset.
+    const off = formatOffset(utcOffset(new Date(year, 6, 1)));
+    lines.push('BEGIN:STANDARD', 'DTSTART:19700101T000000', `TZOFFSETFROM:${off}`, `TZOFFSETTO:${off}`, 'END:STANDARD');
+  } else {
+    for (const t of transitions) {
+      // Wall-clock time of the change, expressed in the offset before it.
+      const wall = new Date(t.at.getTime() + t.from * 60000);
+      const month = wall.getUTCMonth() + 1;
+      const date = wall.getUTCDate();
+      const daysInMonth = new Date(Date.UTC(wall.getUTCFullYear(), month, 0)).getUTCDate();
+      const nth = date + 7 > daysInMonth ? -1 : Math.ceil(date / 7);
+      const kind = t.to > t.from ? 'DAYLIGHT' : 'STANDARD';
+      lines.push(
+        `BEGIN:${kind}`,
+        `DTSTART:${icsUTCFields(wall)}`,
+        `TZOFFSETFROM:${formatOffset(t.from)}`,
+        `TZOFFSETTO:${formatOffset(t.to)}`,
+        `RRULE:FREQ=YEARLY;BYMONTH=${month};BYDAY=${nth}${WEEKDAYS[wall.getUTCDay()]}`,
+        `END:${kind}`
+      );
+    }
+  }
+  lines.push('END:VTIMEZONE');
+  return lines;
+}
+
+function buildReminderICS(time, now = new Date()) {
+  const [hh, mm] = time.split(':').map(Number);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+  if (start <= now) start.setDate(start.getDate() + 1);
+
+  let tzid = '';
+  try { tzid = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* floating time */ }
+
+  const question = 'What went right today that you didn\'t expect?';
+  const stamp = icsUTCFields(now).replace(/00$/, pad2(now.getUTCSeconds())) + 'Z';
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Invisible Good//Gratitude Journal//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...(tzid ? buildVTimezone(tzid, start.getFullYear()) : []),
+    'BEGIN:VEVENT',
+    `UID:invisible-good-${now.getTime()}@invisible-good`,
+    `DTSTAMP:${stamp}`,
+    tzid ? `DTSTART;TZID=${tzid}:${icsLocal(start)}` : `DTSTART:${icsLocal(start)}`,
+    'DURATION:PT5M',
+    'RRULE:FREQ=DAILY',
+    'SUMMARY:Catch the invisible good',
+    `DESCRIPTION:${icsEscape(`${question}\n\nOpen Good from your Home Screen.`)}`,
+    'TRANSP:TRANSPARENT',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${icsEscape(question)}`,
+    'TRIGGER:PT0M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    ''
+  ].join('\r\n');
+}
+
+function reminderHref(time) {
+  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(buildReminderICS(time));
 }
 
 function renderReminderOptions() {
@@ -570,9 +681,17 @@ function renderReminderOptions() {
 
 function updateReminderLink() {
   const time = $('#reminder-time').value;
-  $('#reminder-link').href = reminderFile(time);
+  $('#reminder-link').href = reminderHref(time);
   state.settings.reminderTime = time;
   persistSoon();
+}
+
+// Fallback: hand the same file to the share sheet (Save to Files, then tap
+// it in Files to add it to Calendar).
+async function shareReminder() {
+  const time = $('#reminder-time').value;
+  const blob = new Blob([buildReminderICS(time)], { type: 'text/calendar' });
+  await shareOrDownload(blob, 'invisible-good-reminder.ics');
 }
 
 /* ---------- Settings: backup ---------- */
@@ -601,7 +720,7 @@ function renderSettings() {
   const s = state.settings;
   renderReminderOptions();
   $('#reminder-time').value = s.reminderTime || '21:00';
-  $('#reminder-link').href = reminderFile($('#reminder-time').value);
+  $('#reminder-link').href = reminderHref($('#reminder-time').value);
   $('#last-backup').textContent = s.lastBackup
     ? `Last backup: ${new Date(s.lastBackup).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`
     : 'No backup yet.';
@@ -703,6 +822,7 @@ document.addEventListener('click', e => {
     case 'export': exportBackup(); break;
     case 'import': $('#import-file').click(); break;
     case 'wipe': wipeAll(); break;
+    case 'share-reminder': shareReminder(); break;
     case 'resurface-next': renderResurface(); break;
     case 'back-to-today': editingKey = todayKey(); renderToday(); break;
   }
@@ -716,6 +836,8 @@ document.addEventListener('click', e => {
 $('#done-btn').addEventListener('click', completeEntry);
 $('#search').addEventListener('input', renderPast);
 $('#reminder-time').addEventListener('change', updateReminderLink);
+// Rebuild at tap time so the start date is always the next occurrence.
+$('#reminder-link').addEventListener('click', updateReminderLink);
 $('#import-file').addEventListener('change', e => {
   const f = e.target.files && e.target.files[0];
   if (f) importBackup(f);
