@@ -305,6 +305,7 @@ details { margin-top: 14px; font-size: 15px; }
 summary { color: var(--accent); font-weight: 600; cursor: pointer; }
 .steps { padding-left: 20px; margin: 10px 0; }
 .steps li { margin-bottom: 6px; }
+.steps.small { font-size: 15px; margin: 12px 0 0; }
 
 /* Tab bar */
 .tabbar {

@@ -3,7 +3,7 @@
 // used to serve stale code after an update). Offline, or on a very slow
 // connection, fall back to the saved copy.
 // Bump VERSION whenever app files change so old caches are cleared.
-const VERSION = 'invisible-good-v3';
+const VERSION = 'invisible-good-v4';
 const SHELL = [
   './',
   './index.html',
