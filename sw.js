@@ -1,6 +1,9 @@
-// Offline support: serve the app from cache, refresh the cache in the
-// background. Bump VERSION whenever app files change so old caches are cleared.
-const VERSION = 'invisible-good-v2';
+// Offline support. Online, always fetch the latest files, skipping the
+// browser's HTTP cache (GitHub Pages lets it reuse files for 10 minutes, which
+// used to serve stale code after an update). Offline, or on a very slow
+// connection, fall back to the saved copy.
+// Bump VERSION whenever app files change so old caches are cleared.
+const VERSION = 'invisible-good-v3';
 const SHELL = [
   './',
   './index.html',
@@ -12,9 +15,14 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
+const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(VERSION)
+      .then(cache => cache.addAll(SHELL.map(url => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -28,19 +36,20 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
-  // Let iOS handle calendar files natively; ignore anything cross-origin.
-  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.endsWith('.ics')) return;
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
 
-  event.respondWith(
-    caches.open(VERSION).then(async cache => {
-      const cached = await cache.match(req, { ignoreSearch: true });
-      const network = fetch(req)
-        .then(res => {
-          if (res.ok) cache.put(req, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    const network = fetch(req, { cache: 'no-cache' }).then(res => {
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    });
+    const timeout = new Promise(resolve => setTimeout(resolve, NETWORK_TIMEOUT_MS));
+    try {
+      const res = await Promise.race([network, timeout]);
+      if (res) return res;
+    } catch (e) { /* offline: use the cache */ }
+    const cached = await cache.match(req, { ignoreSearch: true });
+    return cached || network;
+  })());
 });
